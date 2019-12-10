@@ -2,6 +2,8 @@
 
 from smbus2 import SMBus
 import time
+from datetime import datetime
+import json
 
 bus_number  = 1
 i2c_address = 0x76
@@ -11,6 +13,9 @@ bus = SMBus(bus_number)
 digT = []
 digP = []
 digH = []
+
+jdata = {}
+outdata = {}
 
 t_fine = 0.0
 
@@ -67,9 +72,21 @@ def readData():
 	temp_raw = (data[3] << 12) | (data[4] << 4) | (data[5] >> 4)
 	hum_raw  = (data[6] << 8)  |  data[7]
 	
-	compensate_T(temp_raw)
-	compensate_P(pres_raw)
-	compensate_H(hum_raw)
+        compensate_H(hum_raw)
+        compensate_P(pres_raw)        
+        compensate_T(temp_raw)
+	compensate_t()
+	
+	
+      
+
+def compensate_t():
+        time = datetime.now()
+        # t = datetime.datetime.strptime(time,'%Y-%m-%d %H:%M:%S%z')
+        t = time.strftime('%Y-%m-%d %H:%M:%S%z')
+        #print ("time : "+t)
+        jdata["time"] = t
+
 
 def compensate_P(adc_P):
 	global  t_fine
@@ -92,8 +109,12 @@ def compensate_P(adc_P):
 	v1 = (digP[8] * (((pressure / 8.0) * (pressure / 8.0)) / 8192.0)) / 4096
 	v2 = ((pressure / 4.0) * digP[7]) / 8192.0
 	pressure = pressure + ((v1 + v2 + digP[6]) / 16.0)  
+        
+	#print "pressure : %7.2f hPa" % (pressure/100)
+        jdata["press"] = (pressure/100)
+        
 
-	print "pressure : %7.2f hPa" % (pressure/100)
+
 
 def compensate_T(adc_T):
 	global t_fine
@@ -101,7 +122,8 @@ def compensate_T(adc_T):
 	v2 = (adc_T / 131072.0 - digT[0] / 8192.0) * (adc_T / 131072.0 - digT[0] / 8192.0) * digT[2]
 	t_fine = v1 + v2
 	temperature = t_fine / 5120.0
-	print "temp : %-6.2f ℃" % (temperature) 
+	#print "temp : %-6.2f ℃" % (temperature)
+        jdata["temp"] = temperature
 
 def compensate_H(adc_H):
 	global t_fine
@@ -115,7 +137,8 @@ def compensate_H(adc_H):
 		var_h = 100.0
 	elif var_h < 0.0:
 		var_h = 0.0
-	print "hum : %6.2f ％" % (var_h)
+	#print "hum : %6.2f ％" % (var_h)
+        jdata["hum"] = var_h
 
 
 def setup():
@@ -142,10 +165,19 @@ get_calib_param()
 
 if __name__ == '__main__':
 	try:
-		
+        		
+            fw = open('test.json','w')
+            i = 0
             while (1):
                 readData()
+                
+                outdata["id"+str(i)]=jdata
+                print(outdata)
                 time.sleep(10)
+                i = i+1
+            
+            json.dump(outdata,fw,indent=4)
+
 	except KeyboardInterrupt:
 	        pass
 
